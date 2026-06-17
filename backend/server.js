@@ -25,20 +25,27 @@ passport.use(new GoogleStrategy({
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: `http://localhost:${PORT}/auth/google/callback`,
 }, (accessToken, refreshToken, profile, done) => {
-  const email = profile.emails?.[0]?.value;
-  const name = profile.displayName;
-  const avatar = profile.photos?.[0]?.value;
-  const google_id = profile.id;
+  console.log('[Google OAuth] Profile received:', profile?.id, profile?.displayName);
+  try {
+    const email = profile.emails?.[0]?.value;
+    const name = profile.displayName;
+    const avatar = profile.photos?.[0]?.value;
+    const google_id = profile.id;
 
-  let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
-  if (!user) {
-    db.prepare('INSERT INTO users (google_id, email, name, avatar) VALUES (?, ?, ?, ?)').run(google_id, email, name, avatar);
-    user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
-  } else {
-    db.prepare('UPDATE users SET name=?, avatar=? WHERE google_id=?').run(name, avatar, google_id);
+    let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
+    if (!user) {
+      db.prepare('INSERT INTO users (google_id, email, name, avatar) VALUES (?, ?, ?, ?)').run(google_id, email, name, avatar);
+      user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
+    } else {
+      db.prepare('UPDATE users SET name=?, avatar=? WHERE google_id=?').run(name, avatar, google_id);
+    }
+    ensureUserData(user.id);
+    console.log('[Google OAuth] User created/updated:', user.id);
+    done(null, user);
+  } catch (err) {
+    console.error('[Google OAuth] Error:', err);
+    done(err);
   }
-  ensureUserData(user.id);
-  done(null, user);
 }));
 
 // ─── JWT AUTH MIDDLEWARE ──────────────────────────────────────────────────────
@@ -70,14 +77,28 @@ seedAll();
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${FRONTEND_URL}/login?error=1` }),
-  (req, res) => {
-    const token = jwt.sign(
-      { id: req.user.id, email: req.user.email, name: req.user.name, avatar: req.user.avatar },
-      JWT_SECRET,
-      { expiresIn: '30d' }
-    );
-    res.redirect(`${FRONTEND_URL}/auth/callback?token=${token}`);
+  (req, res, next) => {
+    console.log('[Google OAuth] Callback received, query:', req.query);
+    passport.authenticate('google', { session: false, failureRedirect: `${FRONTEND_URL}/login?error=1` }, (err, user, info) => {
+      if (err) {
+        console.error('[Google OAuth] Passport error:', err);
+        return res.redirect(`${FRONTEND_URL}/login?error=1`);
+      }
+      if (!user) {
+        console.error('[Google OAuth] No user returned, info:', info);
+        return res.redirect(`${FRONTEND_URL}/login?error=1`);
+      }
+      req.user = user;
+      console.log('[Google OAuth] Authentication successful for user:', user.id);
+      const token = jwt.sign(
+        { id: user.id, email: user.email, name: user.name, avatar: user.avatar },
+        JWT_SECRET,
+        { expiresIn: '30d' }
+      );
+      const redirectUrl = `${FRONTEND_URL}/auth/callback?token=${token}`;
+      console.log('[Google OAuth] Redirecting to:', redirectUrl);
+      res.redirect(redirectUrl);
+    })(req, res, next);
   }
 );
 
