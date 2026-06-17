@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getETFs, getETFPrices, buyETF, sellETF, getPortfolio, getWallet } from '../api';
-import { RefreshCw, TrendingUp, TrendingDown, ShoppingCart, DollarSign, Search, AlertCircle } from 'lucide-react';
+import { RefreshCw, TrendingUp, TrendingDown, ShoppingCart, DollarSign, Search, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 const fmtInr = (n) => n != null ? '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 const fmt = (n, d = 2) => n != null ? Number(n).toFixed(d) : '—';
@@ -79,13 +79,47 @@ export default function ETFMarket() {
     setDoing(false);
   };
 
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  const SortIcon = ({ col }) => {
+    if (sortCol !== col) return <ChevronsUpDown size={12} style={{ opacity: 0.35, marginLeft: 3 }} />;
+    return sortDir === 'asc' ? <ChevronUp size={12} style={{ marginLeft: 3, color: '#2563eb' }} /> : <ChevronDown size={12} style={{ marginLeft: 3, color: '#2563eb' }} />;
+  };
+
   const heldMap = Object.fromEntries(portfolio.map(p => [p.nse_code, p]));
 
-  const filtered = etfs.filter(e =>
+  const baseFiltered = etfs.filter(e =>
     e.enabled &&
     (e.nse_code.toLowerCase().includes(search.toLowerCase()) ||
       e.underlying.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const filtered = sortCol ? [...baseFiltered].sort((a, b) => {
+    const pa = prices[a.nse_code];
+    const pb = prices[b.nse_code];
+    const ha = heldMap[a.nse_code];
+    const hb = heldMap[b.nse_code];
+    let va, vb;
+    if (sortCol === 'code') { va = a.nse_code; vb = b.nse_code; }
+    else if (sortCol === 'underlying') { va = a.underlying; vb = b.underlying; }
+    else if (sortCol === 'cmp') { va = pa?.cmp ?? -Infinity; vb = pb?.cmp ?? -Infinity; }
+    else if (sortCol === 'dma20') { va = pa?.dma20 ?? -Infinity; vb = pb?.dma20 ?? -Infinity; }
+    else if (sortCol === 'diff') { va = pa?.diff ?? -Infinity; vb = pb?.diff ?? -Infinity; }
+    else if (sortCol === 'pct') { va = pa?.pct_change ?? -Infinity; vb = pb?.pct_change ?? -Infinity; }
+    else if (sortCol === 'plpct') {
+      const cmpA = pa?.cmp; const cmpB = pb?.cmp;
+      va = (ha && cmpA) ? ((cmpA - ha.buy_price) / ha.buy_price) * 100 : -Infinity;
+      vb = (hb && cmpB) ? ((cmpB - hb.buy_price) / hb.buy_price) * 100 : -Infinity;
+    }
+    if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return sortDir === 'asc' ? va - vb : vb - va;
+  }) : baseFiltered;
 
   return (
     <div className="page">
@@ -135,13 +169,27 @@ export default function ETFMarket() {
           <table>
             <thead>
               <tr>
-                <th>ETF NSE Code</th>
-                <th>Underlying Asset</th>
-                <th className="right">CMP</th>
-                <th className="right">20 DMA</th>
-                <th className="right">CMP – 20DMA</th>
-                <th className="right">% vs 20DMA</th>
-                <th className="center">Holding</th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('code')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>ETF NSE Code <SortIcon col="code" /></span>
+                </th>
+                <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('underlying')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center' }}>Underlying Asset <SortIcon col="underlying" /></span>
+                </th>
+                <th className="right" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('cmp')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>CMP <SortIcon col="cmp" /></span>
+                </th>
+                <th className="right" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('dma20')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>20 DMA <SortIcon col="dma20" /></span>
+                </th>
+                <th className="right" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('diff')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>CMP – 20DMA <SortIcon col="diff" /></span>
+                </th>
+                <th className="right" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('pct')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>% vs 20DMA <SortIcon col="pct" /></span>
+                </th>
+                <th className="right" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => handleSort('plpct')}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end' }}>Holding / %P&amp;L <SortIcon col="plpct" /></span>
+                </th>
                 <th className="center">Action</th>
               </tr>
             </thead>
@@ -182,13 +230,23 @@ export default function ETFMarket() {
                         </span>
                       ) : <span style={{ color: '#e2e8f0' }}>—</span>}
                     </td>
-                    <td className="center">
-                      {holding ? (
-                        <div style={{ fontSize: 12 }}>
-                          <p className="font-semibold" style={{ color: '#2563eb' }}>{holding.quantity} units</p>
-                          <p style={{ color: '#64748b' }}>@ {fmtInr(holding.buy_price)}</p>
-                        </div>
-                      ) : <span style={{ color: '#e2e8f0', fontSize: 12 }}>—</span>}
+                    <td className="right">
+                      {holding ? (() => {
+                        const cmp = p?.cmp;
+                        const plPct = cmp ? ((cmp - holding.buy_price) / holding.buy_price) * 100 : null;
+                        const isPlPos = plPct != null && plPct >= 0;
+                        return (
+                          <div style={{ fontSize: 12 }}>
+                            <p className="font-semibold" style={{ color: '#2563eb' }}>{holding.quantity} units</p>
+                            <p style={{ color: '#64748b' }}>@ {fmtInr(holding.buy_price)}</p>
+                            {plPct != null && (
+                              <p className={isPlPos ? 'profit' : 'loss'} style={{ fontWeight: 700 }}>
+                                {isPlPos ? '+' : ''}{fmt(plPct)}%
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })() : <span style={{ color: '#e2e8f0', fontSize: 12 }}>—</span>}
                     </td>
                     <td className="center">
                       <div className="flex justify-center gap-2">

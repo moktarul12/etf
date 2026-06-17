@@ -90,7 +90,7 @@ export default function AutoTrade() {
         <p className="info-box-title">📊 Mahesh Kaushik 20DMA Strategy</p>
         <div className="strategy-grid">
           <div className="strategy-item"><strong>🟢 Buy Signal</strong>CMP drops below 20DMA by ≥ buy trigger %</div>
-          <div className="strategy-item"><strong>🟠 Sell Signal</strong>Profit ≥ target % OR loss ≤ stop loss %, before {form.sell_before_hour}:00</div>
+          <div className="strategy-item"><strong>🟠 Sell Signal</strong>Sell immediately when profit ≥ target % (any time, no restriction)</div>
         </div>
       </div>
 
@@ -105,9 +105,7 @@ export default function AutoTrade() {
         <div className="form-row">
           {field('Max Investment Per ETF (₹)', 'max_per_etf', { step: '1000', hint: 'Max amount to invest in one ETF' })}
           {field('Buy Trigger (% below 20DMA)', 'buy_trigger_pct', { hint: 'e.g. -2 = buy when CMP is 2% below 20DMA' })}
-          {field('Sell Target Profit (%)', 'sell_target_pct', { hint: 'e.g. 6 = sell when 6% profit reached' })}
-          {field('Stop Loss (%)', 'stop_loss_pct', { hint: 'e.g. -3 = sell when loss exceeds 3%' })}
-          {field('Sell Before Hour (24h)', 'sell_before_hour', { step: '1', hint: 'e.g. 14 = only sell before 2:00 PM' })}
+          {field('Sell Target Profit (%)', 'sell_target_pct', { hint: 'Sell immediately when profit reaches this % — any time of day' })}
         </div>
         <button className="btn btn-primary w-full" style={{ marginTop: 16 }} onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Settings'}

@@ -108,17 +108,23 @@ export default function ManageETFs() {
                 <td className="font-mono font-semibold" style={{ fontSize: 12 }}>{etf.nse_code}</td>
                 <td style={{ fontSize: 12 }}>{etf.underlying}</td>
                 <td className="center">
-                  <button className="toggle-icon" onClick={() => handleToggle(etf.id)} title={etf.enabled ? 'Disable' : 'Enable'}>
+                  <button
+                    onClick={() => handleToggle(etf.id)}
+                    title={etf.enabled ? 'Click to disable' : 'Click to enable'}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', display: 'inline-flex', alignItems: 'center', borderRadius: 6, outline: 'none' }}
+                  >
                     {etf.enabled
-                      ? <ToggleRight size={24} color="#16a34a" />
-                      : <ToggleLeft size={24} color="#94a3b8" />}
+                      ? <ToggleRight size={26} color="#16a34a" />
+                      : <ToggleLeft size={26} color="#cbd5e1" />}
                   </button>
                 </td>
                 <td className="center">
-                  <button onClick={() => handleDelete(etf.id, etf.nse_code)}
-                    style={{ padding: '4px 8px', color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6 }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  <button
+                    onClick={() => handleDelete(etf.id, etf.nse_code)}
+                    title="Delete"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '5px 7px', borderRadius: 6, color: '#fca5a5', display: 'inline-flex', outline: 'none', transition: 'background 0.15s, color 0.15s' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#dc2626'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#fca5a5'; }}
                   >
                     <Trash2 size={15} />
                   </button>

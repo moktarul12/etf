@@ -1,6 +1,6 @@
 // Auto buy/sell engine based on Mahesh Kaushik's 20DMA strategy
 // Buy Rule:  CMP drops below 20DMA by buy_trigger_pct% → buy
-// Sell Rule: profit >= sell_target_pct% OR loss <= stop_loss_pct% AND time < 14:00 → sell
+// Sell Rule: profit >= sell_target_pct% → sell any time (stop loss disabled)
 
 const db = require('./db');
 
@@ -33,41 +33,29 @@ function runAutoTrade(priceMap) {
   const logs = [];
 
   // --- SELL CHECK ---
-  // Only sell before sell_before_hour (default 14:00)
-  if (hour < settings.sell_before_hour) {
-    for (const holding of portfolio) {
-      const price = priceMap[holding.nse_code];
-      if (!price) continue;
+  // Sell any time profit target is reached (no time restriction)
+  for (const holding of portfolio) {
+    const price = priceMap[holding.nse_code];
+    if (!price) continue;
 
-      const cmp = price.cmp;
-      const profitPct = ((cmp - holding.buy_price) / holding.buy_price) * 100;
+    const cmp = price.cmp;
+    const profitPct = ((cmp - holding.buy_price) / holding.buy_price) * 100;
 
-      let shouldSell = false;
-      let reason = '';
+    if (profitPct >= settings.sell_target_pct) {
+      const totalValue = holding.quantity * cmp;
+      const profit = totalValue - holding.total_investment;
+      const reason = `Target achieved: +${profitPct.toFixed(2)}%`;
 
-      if (profitPct >= settings.sell_target_pct) {
-        shouldSell = true;
-        reason = `Target achieved: +${profitPct.toFixed(2)}%`;
-      } else if (profitPct <= settings.stop_loss_pct) {
-        shouldSell = true;
-        reason = `Stop loss hit: ${profitPct.toFixed(2)}%`;
-      }
+      db.prepare(`DELETE FROM portfolio WHERE id = ?`).run(holding.id);
+      db.prepare(`
+        INSERT INTO trade_history (nse_code, underlying, trade_type, quantity, price, total_value, profit, profit_pct, mode, reason)
+        VALUES (?, ?, 'SELL', ?, ?, ?, ?, ?, 'AUTO', ?)
+      `).run(holding.nse_code, holding.underlying, holding.quantity, cmp, totalValue, profit, profitPct, reason);
+      db.prepare(`
+        UPDATE wallet SET balance = balance + ?, invested = invested - ?, realized_profit = realized_profit + ?, updated_at = datetime('now') WHERE id = 1
+      `).run(totalValue, holding.total_investment, profit);
 
-      if (shouldSell) {
-        const totalValue = holding.quantity * cmp;
-        const profit = totalValue - holding.total_investment;
-
-        db.prepare(`DELETE FROM portfolio WHERE id = ?`).run(holding.id);
-        db.prepare(`
-          INSERT INTO trade_history (nse_code, underlying, trade_type, quantity, price, total_value, profit, profit_pct, mode, reason)
-          VALUES (?, ?, 'SELL', ?, ?, ?, ?, ?, 'AUTO', ?)
-        `).run(holding.nse_code, holding.underlying, holding.quantity, cmp, totalValue, profit, profitPct, reason);
-        db.prepare(`
-          UPDATE wallet SET balance = balance + ?, invested = invested - ?, realized_profit = realized_profit + ?, updated_at = datetime('now') WHERE id = 1
-        `).run(totalValue, holding.total_investment, profit);
-
-        logs.push({ type: 'SELL', code: holding.nse_code, price: cmp, profit, profitPct, reason });
-      }
+      logs.push({ type: 'SELL', code: holding.nse_code, price: cmp, profit, profitPct, reason });
     }
   }
 
