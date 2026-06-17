@@ -7,6 +7,15 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    google_id TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    name TEXT,
+    avatar TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS etf_list (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nse_code TEXT UNIQUE NOT NULL,
@@ -24,8 +33,9 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS wallet (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    balance REAL DEFAULT 0,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+    balance REAL DEFAULT 100000,
     invested REAL DEFAULT 0,
     realized_profit REAL DEFAULT 0,
     updated_at TEXT DEFAULT (datetime('now'))
@@ -33,6 +43,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS portfolio (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
     nse_code TEXT NOT NULL,
     underlying TEXT NOT NULL,
     quantity INTEGER NOT NULL,
@@ -44,6 +55,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS trade_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
     nse_code TEXT NOT NULL,
     underlying TEXT,
     trade_type TEXT NOT NULL,
@@ -58,27 +70,22 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS auto_settings (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
     enabled INTEGER DEFAULT 0,
     max_per_etf REAL DEFAULT 10000,
     buy_trigger_pct REAL DEFAULT -2.0,
     sell_target_pct REAL DEFAULT 6.0,
     stop_loss_pct REAL DEFAULT -3.0,
-    sell_before_hour INTEGER DEFAULT 14,
     updated_at TEXT DEFAULT (datetime('now'))
   );
 `);
 
-// Seed wallet if not exists
-const wallet = db.prepare('SELECT id FROM wallet WHERE id = 1').get();
-if (!wallet) {
-  db.prepare('INSERT INTO wallet (id, balance) VALUES (1, 100000)').run();
+function ensureUserData(userId) {
+  const w = db.prepare('SELECT id FROM wallet WHERE user_id = ?').get(userId);
+  if (!w) db.prepare('INSERT INTO wallet (user_id, balance) VALUES (?, 100000)').run(userId);
+  const s = db.prepare('SELECT id FROM auto_settings WHERE user_id = ?').get(userId);
+  if (!s) db.prepare('INSERT INTO auto_settings (user_id) VALUES (?)').run(userId);
 }
 
-// Seed auto_settings if not exists
-const settings = db.prepare('SELECT id FROM auto_settings WHERE id = 1').get();
-if (!settings) {
-  db.prepare('INSERT INTO auto_settings (id) VALUES (1)').run();
-}
-
-module.exports = db;
+module.exports = { db, ensureUserData };

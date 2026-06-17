@@ -1,11 +1,24 @@
 const BASE = '/api';
 
+function getToken() {
+  return localStorage.getItem('etf_token');
+}
+
 async function req(path, opts = {}) {
+  const token = getToken();
   const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
     ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
+  if (res.status === 401) {
+    localStorage.removeItem('etf_token');
+    window.location.href = '/login';
+    return;
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || res.statusText);

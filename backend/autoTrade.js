@@ -2,31 +2,15 @@
 // Buy Rule:  CMP drops below 20DMA by buy_trigger_pct% → buy
 // Sell Rule: profit >= sell_target_pct% → sell any time (stop loss disabled)
 
-const db = require('./db');
+const { db } = require('./db');
 
-function getSettings() {
-  return db.prepare('SELECT * FROM auto_settings WHERE id = 1').get();
-}
+function runAutoTrade(priceMap, userId) {
+  const settings = db.prepare('SELECT * FROM auto_settings WHERE user_id = ?').get(userId);
+  if (!settings || !settings.enabled) return [];
 
-function getWallet() {
-  return db.prepare('SELECT * FROM wallet WHERE id = 1').get();
-}
-
-function getPortfolio() {
-  return db.prepare('SELECT * FROM portfolio').all();
-}
-
-function getActiveETFs() {
-  return db.prepare('SELECT * FROM etf_list WHERE enabled = 1').all();
-}
-
-function runAutoTrade(priceMap) {
-  const settings = getSettings();
-  if (!settings.enabled) return [];
-
-  const wallet = getWallet();
-  const portfolio = getPortfolio();
-  const etfs = getActiveETFs();
+  const wallet = db.prepare('SELECT * FROM wallet WHERE user_id = ?').get(userId);
+  const portfolio = db.prepare('SELECT * FROM portfolio WHERE user_id = ?').all(userId);
+  const etfs = db.prepare('SELECT * FROM etf_list WHERE enabled = 1').all();
   const now = new Date();
   const hour = now.getHours();
 
@@ -46,14 +30,14 @@ function runAutoTrade(priceMap) {
       const profit = totalValue - holding.total_investment;
       const reason = `Target achieved: +${profitPct.toFixed(2)}%`;
 
-      db.prepare(`DELETE FROM portfolio WHERE id = ?`).run(holding.id);
+      db.prepare(`DELETE FROM portfolio WHERE id = ? AND user_id = ?`).run(holding.id, userId);
       db.prepare(`
-        INSERT INTO trade_history (nse_code, underlying, trade_type, quantity, price, total_value, profit, profit_pct, mode, reason)
-        VALUES (?, ?, 'SELL', ?, ?, ?, ?, ?, 'AUTO', ?)
-      `).run(holding.nse_code, holding.underlying, holding.quantity, cmp, totalValue, profit, profitPct, reason);
+        INSERT INTO trade_history (user_id, nse_code, underlying, trade_type, quantity, price, total_value, profit, profit_pct, mode, reason)
+        VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, ?, 'AUTO', ?)
+      `).run(userId, holding.nse_code, holding.underlying, holding.quantity, cmp, totalValue, profit, profitPct, reason);
       db.prepare(`
-        UPDATE wallet SET balance = balance + ?, invested = invested - ?, realized_profit = realized_profit + ?, updated_at = datetime('now') WHERE id = 1
-      `).run(totalValue, holding.total_investment, profit);
+        UPDATE wallet SET balance = balance + ?, invested = invested - ?, realized_profit = realized_profit + ?, updated_at = datetime('now') WHERE user_id = ?
+      `).run(totalValue, holding.total_investment, profit, userId);
 
       logs.push({ type: 'SELL', code: holding.nse_code, price: cmp, profit, profitPct, reason });
     }
@@ -62,7 +46,7 @@ function runAutoTrade(priceMap) {
   // --- BUY CHECK ---
   // Check which ETFs are not currently held
   const heldCodes = new Set(portfolio.map(p => p.nse_code));
-  const currentWallet = getWallet();
+  const currentWallet = db.prepare('SELECT * FROM wallet WHERE user_id = ?').get(userId);
 
   for (const etf of etfs) {
     if (heldCodes.has(etf.nse_code)) continue;
@@ -85,16 +69,16 @@ function runAutoTrade(priceMap) {
       if (totalCost > currentWallet.balance) continue;
 
       db.prepare(`
-        INSERT INTO portfolio (nse_code, underlying, quantity, buy_price, total_investment)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(etf.nse_code, etf.underlying, quantity, cmp, totalCost);
+        INSERT INTO portfolio (user_id, nse_code, underlying, quantity, buy_price, total_investment)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(userId, etf.nse_code, etf.underlying, quantity, cmp, totalCost);
       db.prepare(`
-        INSERT INTO trade_history (nse_code, underlying, trade_type, quantity, price, total_value, mode, reason)
-        VALUES (?, ?, 'BUY', ?, ?, ?, 'AUTO', ?)
-      `).run(etf.nse_code, etf.underlying, quantity, cmp, totalCost, `20DMA dip: ${pctFromDMA.toFixed(2)}%`);
+        INSERT INTO trade_history (user_id, nse_code, underlying, trade_type, quantity, price, total_value, mode, reason)
+        VALUES (?, ?, ?, 'BUY', ?, ?, ?, 'AUTO', ?)
+      `).run(userId, etf.nse_code, etf.underlying, quantity, cmp, totalCost, `20DMA dip: ${pctFromDMA.toFixed(2)}%`);
       db.prepare(`
-        UPDATE wallet SET balance = balance - ?, invested = invested + ?, updated_at = datetime('now') WHERE id = 1
-      `).run(totalCost, totalCost);
+        UPDATE wallet SET balance = balance - ?, invested = invested + ?, updated_at = datetime('now') WHERE user_id = ?
+      `).run(totalCost, totalCost, userId);
 
       heldCodes.add(etf.nse_code);
       logs.push({ type: 'BUY', code: etf.nse_code, price: cmp, quantity, totalCost, reason: `20DMA dip: ${pctFromDMA.toFixed(2)}%` });
