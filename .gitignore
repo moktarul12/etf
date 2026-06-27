@@ -7,3 +7,6 @@ frontend/dist/
 *.db-wal
 .env
 .DS_Store
+
+# Local Netlify folder
+.netlify
