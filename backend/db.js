@@ -7,8 +7,8 @@ const dbPath = process.env.NODE_ENV === 'production'
   ? '/var/data/etf-dukan.db'
   : path.join(__dirname, 'etf-dukan.db');
 
-// Create directory if it doesn't exist (for production)
-if (process.env.NODE_ENV === 'production') {
+// Create directory only for local development
+if (process.env.NODE_ENV !== 'production') {
   const dbDir = path.dirname(dbPath);
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true });
