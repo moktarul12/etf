@@ -1,10 +1,19 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 
 // Use persistent volume on Render, fallback to local directory for development
 const dbPath = process.env.NODE_ENV === 'production'
   ? '/var/data/etf-dukan.db'
   : path.join(__dirname, 'etf-dukan.db');
+
+// Create directory if it doesn't exist (for production)
+if (process.env.NODE_ENV === 'production') {
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+}
 
 const db = new Database(dbPath);
 
