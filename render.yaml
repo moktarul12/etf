@@ -14,6 +14,8 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
 
   - type: web
     name: etf-frontend
