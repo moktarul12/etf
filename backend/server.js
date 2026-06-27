@@ -283,6 +283,6 @@ async function scheduledAutoRun() {
 
 setInterval(scheduledAutoRun, 5 * 60 * 1000);
 
-app.listen(PORT, () => {
-  console.log(`ETF Dukan backend running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`ETF Dukan backend running on http://0.0.0.0:${PORT}`);
 });

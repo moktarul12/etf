@@ -6,6 +6,8 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
@@ -16,6 +18,10 @@ services:
         sync: false
       - key: GOOGLE_CALLBACK_URL
         sync: false
+    disk:
+      name: etf-db-volume
+      mountPath: /var/data
+      sizeGB: 1
 
   - type: web
     name: etf-frontend

@@ -1,7 +1,12 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const db = new Database(path.join(__dirname, 'etf-dukan.db'));
+// Use persistent volume on Render, fallback to local directory for development
+const dbPath = process.env.NODE_ENV === 'production'
+  ? '/var/data/etf-dukan.db'
+  : path.join(__dirname, 'etf-dukan.db');
+
+const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
