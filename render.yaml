@@ -20,6 +20,16 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
     disk:
       name: etf-db-volume
       mountPath: /var/data

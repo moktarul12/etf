@@ -8,6 +8,7 @@ const { db, ensureUserData } = require('./db');
 const ETF_CODES = require('./etfCodes');
 const { getPricesForCodes, getPriceForCode } = require('./priceService');
 const { runAutoTrade, isMarketOpen } = require('./autoTrade');
+const { sendTradeEmail } = require('./mailer');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://etfui.onrender.com' : 'http://localhost:3000');
@@ -257,6 +258,10 @@ app.post('/api/auto-trade/run', authMiddleware, async (req, res) => {
     const etfs = db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
     const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
     const logs = runAutoTrade(prices, req.user.id);
+    if (logs.length > 0) {
+      const u = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+      if (u?.email) sendTradeEmail(u.email, logs);
+    }
     res.json({ success: true, actions: logs });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -275,7 +280,11 @@ async function runAutoTradeForAllUsers({ force = false } = {}) {
   const results = [];
   for (const { user_id } of activeUsers) {
     const logs = runAutoTrade(prices, user_id);
-    if (logs.length > 0) console.log(`[AutoTrade] user=${user_id}`, new Date().toISOString(), logs);
+    if (logs.length > 0) {
+      console.log(`[AutoTrade] user=${user_id}`, new Date().toISOString(), logs);
+      const u = db.prepare('SELECT email FROM users WHERE id = ?').get(user_id);
+      if (u?.email) sendTradeEmail(u.email, logs);
+    }
     results.push({ user_id, actions: logs.length });
   }
   return { ran: true, users: results };
