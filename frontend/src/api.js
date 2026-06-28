@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
+const BASE = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'https://backend-gsx6.onrender.com/api';
 
 function getToken() {
   return localStorage.getItem('etf_token');

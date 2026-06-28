@@ -5,7 +5,7 @@ export default function Login() {
   const error = params.get('error');
 
   const handleGoogleLogin = () => {
-    const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const backendUrl = import.meta.env.VITE_API_URL || 'https://backend-gsx6.onrender.com';
     window.location.href = `${backendUrl}/auth/google`;
   };
 
