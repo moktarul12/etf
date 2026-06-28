@@ -25,10 +25,10 @@ services:
 
   - type: web
     name: etf-frontend
-    runtime: node
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
-    startCommand: node server.js
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
         sync: false
