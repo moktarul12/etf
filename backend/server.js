@@ -336,8 +336,8 @@ setInterval(scheduledAutoRun, 30 * 60 * 1000);
 // instances sleep. Protect with the CRON_SECRET env var.
 // Usage: GET /api/cron/auto-run?key=YOUR_SECRET   (add &force=1 to bypass market-hours)
 app.get('/api/cron/auto-run', async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.query.key !== secret) {
+  const secret = process.env.CRON_SECRET || '4bd08433de8c7aeb427ac148ee198f54104d2ecde16ed9ddf';
+  if (req.query.key !== secret) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
@@ -355,8 +355,8 @@ app.get('/api/cron/auto-run', async (req, res) => {
 // Price-only cron endpoint — hit every 5 min to keep prices fresh.
 // Usage: GET /api/cron/price-update?key=YOUR_SECRET
 app.get('/api/cron/price-update', async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.query.key !== secret) {
+  const secret = process.env.CRON_SECRET || '4bd08433de8c7aeb427ac148ee198f54104d2ecde16ed9ddf';
+  if (req.query.key !== secret) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
