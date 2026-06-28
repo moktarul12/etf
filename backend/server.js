@@ -352,6 +352,21 @@ app.get('/api/cron/auto-run', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Price-only cron endpoint — hit every 5 min to keep prices fresh.
+// Usage: GET /api/cron/price-update?key=YOUR_SECRET
+app.get('/api/cron/price-update', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.query.key !== secret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const etfs = await db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
+    const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
+    await persistPrices(prices);
+    res.json({ success: true, pricesUpdated: etfs.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── STARTUP (async: init DB → seed ETFs → start server) ────────────────────
 async function main() {
   await initDb();
