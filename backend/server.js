@@ -263,23 +263,46 @@ app.post('/api/auto-trade/run', authMiddleware, async (req, res) => {
 
 // ─── AUTO TRADE SCHEDULER (per user, every 30 min during NSE market hours) ────
 
-async function scheduledAutoRun() {
-  if (!isMarketOpen()) return;
+// Runs the engine for all users with auto-trade enabled. Returns a summary.
+async function runAutoTradeForAllUsers({ force = false } = {}) {
+  if (!force && !isMarketOpen()) return { ran: false, reason: 'market_closed' };
 
   const activeUsers = db.prepare('SELECT user_id FROM auto_settings WHERE enabled = 1').all();
-  if (!activeUsers.length) return;
+  if (!activeUsers.length) return { ran: false, reason: 'no_active_users' };
 
+  const etfs = db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
+  const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
+  const results = [];
+  for (const { user_id } of activeUsers) {
+    const logs = runAutoTrade(prices, user_id);
+    if (logs.length > 0) console.log(`[AutoTrade] user=${user_id}`, new Date().toISOString(), logs);
+    results.push({ user_id, actions: logs.length });
+  }
+  return { ran: true, users: results };
+}
+
+async function scheduledAutoRun() {
   try {
-    const etfs = db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
-    const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
-    for (const { user_id } of activeUsers) {
-      const logs = runAutoTrade(prices, user_id);
-      if (logs.length > 0) console.log(`[AutoTrade] user=${user_id}`, new Date().toISOString(), logs);
-    }
+    await runAutoTradeForAllUsers();
   } catch (err) { console.error('[AutoTrade Error]', err.message); }
 }
 
 setInterval(scheduledAutoRun, 30 * 60 * 1000);
+
+// External cron endpoint — hit this every ~15-30 min from a free uptime monitor
+// (e.g. cron-job.org / UptimeRobot) so trades still fire when Render free
+// instances sleep. Protect with the CRON_SECRET env var.
+// Usage: GET /api/cron/auto-run?key=YOUR_SECRET   (add &force=1 to bypass market-hours)
+app.get('/api/cron/auto-run', async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.query.key !== secret) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  try {
+    const summary = await runAutoTradeForAllUsers({ force: req.query.force === '1' });
+    res.json({ success: true, ...summary });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ETF Dukan backend running on http://0.0.0.0:${PORT}`);

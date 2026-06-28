@@ -18,6 +18,8 @@ services:
         sync: false
       - key: GOOGLE_CALLBACK_URL
         sync: false
+      - key: CRON_SECRET
+        sync: false
     disk:
       name: etf-db-volume
       mountPath: /var/data
