@@ -28,6 +28,16 @@ export default function ETFMarket() {
       setEtfs(etfList);
       setPortfolio(ptf);
       setWallet(wlt);
+      // Seed the table with last-persisted prices so values show immediately,
+      // even before a manual refresh or if a refresh response is dropped.
+      const seeded = {};
+      for (const e of etfList) {
+        if (e.cmp) seeded[e.nse_code] = { cmp: e.cmp, dma20: e.dma20, diff: e.diff, pct_change: e.pct_change };
+      }
+      if (Object.keys(seeded).length) {
+        setPrices(seeded);
+        if (etfList[0]?.updated_at) setLastRefresh(new Date(etfList[0].updated_at + 'Z'));
+      }
     } catch (e) { setError(e.message); }
     setLoading(false);
   }, []);
@@ -37,7 +47,15 @@ export default function ETFMarket() {
     setError('');
     try {
       const data = await getETFPrices();
-      setPrices(data);
+      // Merge fresh values over existing ones; keep last-known price for any
+      // ticker that failed (null) this round instead of blanking it out.
+      setPrices(prev => {
+        const merged = { ...prev };
+        for (const [code, p] of Object.entries(data || {})) {
+          if (p && p.cmp != null) merged[code] = p;
+        }
+        return merged;
+      });
       setLastRefresh(new Date());
     } catch (e) { setError('Price fetch failed: ' + e.message); }
     setPriceLoading(false);

@@ -23,7 +23,15 @@ async function req(path, opts = {}) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || res.statusText);
   }
-  return res.json();
+  // Guard against empty bodies (e.g. a slow request whose response was dropped
+  // by a gateway) so we don't crash with "Unexpected end of JSON input".
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Server returned an invalid response. Please try again.');
+  }
 }
 
 // ETF

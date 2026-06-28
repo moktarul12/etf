@@ -109,6 +109,19 @@ app.get('/auth/me', authMiddleware, (req, res) => {
 
 // ─── ETF LIST ROUTES (public — shared master list) ───────────────────────────
 
+// Persist fetched prices into etf_list so /api/etf reflects live values and
+// the data survives between refreshes / restarts.
+const updatePriceStmt = db.prepare(
+  `UPDATE etf_list SET cmp=?, dma20=?, diff=?, pct_change=?, updated_at=datetime('now') WHERE nse_code=?`
+);
+const persistPrices = db.transaction((priceMap) => {
+  for (const [code, p] of Object.entries(priceMap)) {
+    if (p && p.cmp != null) {
+      updatePriceStmt.run(p.cmp, p.dma20, p.diff, p.pct_change, code);
+    }
+  }
+});
+
 app.get('/api/etf', authMiddleware, (req, res) => {
   res.json(db.prepare('SELECT * FROM etf_list ORDER BY nse_code ASC').all());
 });
@@ -117,6 +130,7 @@ app.get('/api/etf/prices', authMiddleware, async (req, res) => {
   try {
     const etfs = db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
     const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
+    persistPrices(prices);
     res.json(prices);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -277,6 +291,7 @@ async function runAutoTradeForAllUsers({ force = false } = {}) {
 
   const etfs = db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
   const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
+  persistPrices(prices);
   const results = [];
   for (const { user_id } of activeUsers) {
     const logs = runAutoTrade(prices, user_id);

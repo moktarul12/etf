@@ -19,7 +19,7 @@ function fetchJson(url) {
         'User-Agent': 'Mozilla/5.0 (compatible; ETFDukan/1.0)',
         'Accept': 'application/json',
       },
-      timeout: 8000
+      timeout: 7000
     }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
@@ -34,9 +34,15 @@ function fetchJson(url) {
 }
 
 async function fetchPriceFromYahoo(ticker) {
-  // Yahoo Finance v8 chart API - 1 month daily to compute 20DMA
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2mo`;
-  const data = await fetchJson(url);
+  // Yahoo Finance v8 chart API - 2 months daily to compute 20DMA.
+  // Try query1, fall back to query2 (datacenter IPs sometimes get blocked on one host).
+  const path = `/v8/finance/chart/${ticker}?interval=1d&range=2mo`;
+  let data;
+  try {
+    data = await fetchJson(`https://query1.finance.yahoo.com${path}`);
+  } catch (e) {
+    data = await fetchJson(`https://query2.finance.yahoo.com${path}`);
+  }
 
   const result = data?.chart?.result?.[0];
   if (!result) throw new Error(`No data for ${ticker}`);
@@ -80,8 +86,8 @@ async function getPriceForCode(nseCode) {
 }
 
 async function getPricesForCodes(nseCodes) {
-  // Batch with small concurrency limit to avoid rate limiting
-  const BATCH = 5;
+  // Batch with a concurrency limit to balance speed vs. rate limiting.
+  const BATCH = 10;
   const results = {};
 
   for (let i = 0; i < nseCodes.length; i += BATCH) {
@@ -94,7 +100,7 @@ async function getPricesForCodes(nseCodes) {
     );
     // Small delay between batches
     if (i + BATCH < nseCodes.length) {
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 150));
     }
   }
 
