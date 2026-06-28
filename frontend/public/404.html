@@ -5,15 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Redirecting...</title>
     <script>
-        // Get the requested path
-        const path = window.location.pathname;
-        
-        // If it's not a file (no extension), redirect to index.html
-        if (!path.includes('.') && path !== '/') {
-            window.location.replace('/?redirect=' + encodeURIComponent(path));
-        } else if (path === '/') {
-            window.location.replace('/index.html');
-        }
+        // SPA fallback: store the requested path and redirect to root,
+        // where index.html will restore it via the History API.
+        sessionStorage.setItem('spa-redirect', location.pathname + location.search + location.hash);
+        location.replace('/');
     </script>
 </head>
 <body>
