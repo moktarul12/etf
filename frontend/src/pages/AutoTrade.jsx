@@ -79,7 +79,7 @@ export default function AutoTrade() {
           <p className="font-semibold">Auto Trade is {settings.enabled ? 'ENABLED' : 'DISABLED'}</p>
           <p style={{ fontSize: 12, marginTop: 2 }}>
             {settings.enabled
-              ? 'Engine runs every 5 minutes during market hours (9:15 AM – 3:30 PM IST).'
+              ? 'Engine runs every 30 minutes during market hours (9:15 AM – 3:30 PM IST).'
               : 'Enable to automatically buy ETFs on 20DMA dips and sell at targets.'}
           </p>
         </div>
@@ -89,7 +89,8 @@ export default function AutoTrade() {
       <div className="info-box mb-6">
         <p className="info-box-title">📊 Mahesh Kaushik 20DMA Strategy</p>
         <div className="strategy-grid">
-          <div className="strategy-item"><strong>🟢 Buy Signal</strong>CMP drops below 20DMA by ≥ buy trigger %</div>
+          <div className="strategy-item"><strong>🟢 Daily Buy</strong>Once per day, spend the daily budget on the deepest 20DMA dip (lowest % vs 20DMA) not already held — buys as many shares as the budget allows</div>
+          <div className="strategy-item"><strong>🔵 Repurchase</strong>Average down on a holding at each -10%, -20%, -30%… below its original buy price (each step once)</div>
           <div className="strategy-item"><strong>🟠 Sell Signal</strong>Sell immediately when profit ≥ target % (any time, no restriction)</div>
         </div>
       </div>
@@ -103,7 +104,7 @@ export default function AutoTrade() {
           <Settings size={15} /> Trade Settings
         </h2>
         <div className="form-row">
-          {field('Max Investment Per ETF (₹)', 'max_per_etf', { step: '1000', hint: 'Max amount to invest in one ETF' })}
+          {field('Daily Buy Budget (₹)', 'daily_budget', { step: '500', hint: 'Amount spent per purchase (default ₹2000) — qty = budget ÷ price' })}
           {field('Buy Trigger (% below 20DMA)', 'buy_trigger_pct', { hint: 'e.g. -2 = buy when CMP is 2% below 20DMA' })}
           {field('Sell Target Profit (%)', 'sell_target_pct', { hint: 'Sell immediately when profit reaches this % — any time of day' })}
         </div>

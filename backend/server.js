@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const { db, ensureUserData } = require('./db');
 const ETF_CODES = require('./etfCodes');
 const { getPricesForCodes, getPriceForCode } = require('./priceService');
-const { runAutoTrade } = require('./autoTrade');
+const { runAutoTrade, isMarketOpen } = require('./autoTrade');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const FRONTEND_URL = process.env.FRONTEND_URL || (process.env.NODE_ENV === 'production' ? 'https://etfui.onrender.com' : 'http://localhost:3000');
@@ -191,8 +191,8 @@ app.post('/api/trade/buy', authMiddleware, (req, res) => {
     db.prepare('UPDATE portfolio SET quantity=?, buy_price=?, total_investment=? WHERE user_id=? AND nse_code=?')
       .run(newQty, newAvgPrice, existing.total_investment + totalCost, uid, nse_code);
   } else {
-    db.prepare('INSERT INTO portfolio (user_id, nse_code, underlying, quantity, buy_price, total_investment) VALUES (?,?,?,?,?,?)')
-      .run(uid, nse_code, underlying, quantity, price, totalCost);
+    db.prepare('INSERT INTO portfolio (user_id, nse_code, underlying, quantity, buy_price, total_investment, first_buy_price, repurchase_level) VALUES (?,?,?,?,?,?,?,0)')
+      .run(uid, nse_code, underlying, quantity, price, totalCost, price);
   }
   db.prepare(`INSERT INTO trade_history (user_id, nse_code, underlying, trade_type, quantity, price, total_value, mode) VALUES (?,?,?,'BUY',?,?,?,'MANUAL')`)
     .run(uid, nse_code, underlying, quantity, price, totalCost);
@@ -246,9 +246,9 @@ app.get('/api/auto-settings', authMiddleware, (req, res) => {
 });
 
 app.put('/api/auto-settings', authMiddleware, (req, res) => {
-  const { enabled, max_per_etf, buy_trigger_pct, sell_target_pct, stop_loss_pct } = req.body;
-  db.prepare(`UPDATE auto_settings SET enabled=?, max_per_etf=?, buy_trigger_pct=?, sell_target_pct=?, stop_loss_pct=?, updated_at=datetime('now') WHERE user_id=?`)
-    .run(enabled ? 1 : 0, max_per_etf, buy_trigger_pct, sell_target_pct, stop_loss_pct, req.user.id);
+  const { enabled, max_per_etf, daily_budget, buy_trigger_pct, sell_target_pct, stop_loss_pct } = req.body;
+  db.prepare(`UPDATE auto_settings SET enabled=?, max_per_etf=?, daily_budget=?, buy_trigger_pct=?, sell_target_pct=?, stop_loss_pct=?, updated_at=datetime('now') WHERE user_id=?`)
+    .run(enabled ? 1 : 0, max_per_etf, daily_budget, buy_trigger_pct, sell_target_pct, stop_loss_pct, req.user.id);
   res.json(db.prepare('SELECT * FROM auto_settings WHERE user_id = ?').get(req.user.id));
 });
 
@@ -261,12 +261,10 @@ app.post('/api/auto-trade/run', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── AUTO TRADE SCHEDULER (per user, every 5 min during market hours) ─────────
+// ─── AUTO TRADE SCHEDULER (per user, every 30 min during NSE market hours) ────
 
 async function scheduledAutoRun() {
-  const now = new Date();
-  const hour = now.getHours(), min = now.getMinutes();
-  if (hour < 9 || hour > 15 || (hour === 9 && min < 15) || (hour === 15 && min > 30)) return;
+  if (!isMarketOpen()) return;
 
   const activeUsers = db.prepare('SELECT user_id FROM auto_settings WHERE enabled = 1').all();
   if (!activeUsers.length) return;
@@ -281,7 +279,7 @@ async function scheduledAutoRun() {
   } catch (err) { console.error('[AutoTrade Error]', err.message); }
 }
 
-setInterval(scheduledAutoRun, 5 * 60 * 1000);
+setInterval(scheduledAutoRun, 30 * 60 * 1000);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`ETF Dukan backend running on http://0.0.0.0:${PORT}`);

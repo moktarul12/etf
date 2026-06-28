@@ -86,12 +86,30 @@ db.exec(`
     user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
     enabled INTEGER DEFAULT 0,
     max_per_etf REAL DEFAULT 10000,
+    daily_budget REAL DEFAULT 2000,
     buy_trigger_pct REAL DEFAULT -2.0,
     sell_target_pct REAL DEFAULT 6.0,
     stop_loss_pct REAL DEFAULT -3.0,
     updated_at TEXT DEFAULT (datetime('now'))
   );
 `);
+
+// ─── MIGRATIONS ───────────────────────────────────────────────────────────────
+// Add columns used by the auto-trade engine if they don't already exist.
+const portfolioCols = db.prepare("PRAGMA table_info(portfolio)").all().map(c => c.name);
+if (!portfolioCols.includes('first_buy_price')) {
+  db.exec("ALTER TABLE portfolio ADD COLUMN first_buy_price REAL");
+}
+if (!portfolioCols.includes('repurchase_level')) {
+  db.exec("ALTER TABLE portfolio ADD COLUMN repurchase_level INTEGER DEFAULT 0");
+}
+// Backfill first_buy_price for existing rows so the loss ladder has a reference.
+db.exec("UPDATE portfolio SET first_buy_price = buy_price WHERE first_buy_price IS NULL");
+
+const autoSettingsCols = db.prepare("PRAGMA table_info(auto_settings)").all().map(c => c.name);
+if (!autoSettingsCols.includes('daily_budget')) {
+  db.exec("ALTER TABLE auto_settings ADD COLUMN daily_budget REAL DEFAULT 2000");
+}
 
 function ensureUserData(userId) {
   const w = db.prepare('SELECT id FROM wallet WHERE user_id = ?').get(userId);
