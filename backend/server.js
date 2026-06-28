@@ -71,11 +71,11 @@ const upsertETF = db.prepare(`
   INSERT INTO etf_list (nse_code, underlying) VALUES (?, ?)
   ON CONFLICT(nse_code) DO UPDATE SET underlying = excluded.underlying
 `);
-const seedAll = db.transaction(async () => {
+async function seedAll() {
   for (const etf of ETF_CODES) {
     await upsertETF.run(etf.nse_code, etf.underlying);
   }
-});
+}
 
 // ─── GOOGLE OAUTH ROUTES ──────────────────────────────────────────────────────
 
@@ -118,13 +118,13 @@ app.get('/auth/me', authMiddleware, (req, res) => {
 const updatePriceStmt = db.prepare(
   `UPDATE etf_list SET cmp=?, dma20=?, diff=?, pct_change=?, updated_at=datetime('now') WHERE nse_code=?`
 );
-const persistPrices = db.transaction(async (priceMap) => {
+async function persistPrices(priceMap) {
   for (const [code, p] of Object.entries(priceMap)) {
     if (p && p.cmp != null) {
       await updatePriceStmt.run(p.cmp, p.dma20, p.diff, p.pct_change, code);
     }
   }
-});
+}
 
 app.get('/api/etf', authMiddleware, async (req, res) => {
   res.json(await db.prepare('SELECT * FROM etf_list ORDER BY nse_code ASC').all());

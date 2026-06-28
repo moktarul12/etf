@@ -42,19 +42,6 @@ const db = {
     const r = await client.execute(`PRAGMA ${name}`);
     return r.rows;
   },
-  transaction(fn) {
-    return async function (...args) {
-      await client.execute('BEGIN');
-      try {
-        const result = await fn(...args);
-        await client.execute('COMMIT');
-        return result;
-      } catch (err) {
-        await client.execute('ROLLBACK');
-        throw err;
-      }
-    };
-  },
 };
 
 // ─── SCHEMA + MIGRATIONS (call once on startup) ──────────────────────────────
