@@ -39,9 +39,9 @@ function startOfISTDayUtc() {
 }
 
 // ─── JOB 1: SELL AT PROFIT TARGET ────────────────────────────────────────────
-function runSell(priceMap, userId, settings) {
+async function runSell(priceMap, userId, settings) {
   const logs = [];
-  const portfolio = db.prepare('SELECT * FROM portfolio WHERE user_id = ?').all(userId);
+  const portfolio = await db.prepare('SELECT * FROM portfolio WHERE user_id = ?').all(userId);
 
   for (const holding of portfolio) {
     const price = priceMap[holding.nse_code];
@@ -55,12 +55,12 @@ function runSell(priceMap, userId, settings) {
       const profit = totalValue - holding.total_investment;
       const reason = `Target achieved: +${profitPct.toFixed(2)}%`;
 
-      db.prepare(`DELETE FROM portfolio WHERE id = ? AND user_id = ?`).run(holding.id, userId);
-      db.prepare(`
+      await db.prepare(`DELETE FROM portfolio WHERE id = ? AND user_id = ?`).run(holding.id, userId);
+      await db.prepare(`
         INSERT INTO trade_history (user_id, nse_code, underlying, trade_type, quantity, price, total_value, profit, profit_pct, mode, reason)
         VALUES (?, ?, ?, 'SELL', ?, ?, ?, ?, ?, 'AUTO', ?)
       `).run(userId, holding.nse_code, holding.underlying, holding.quantity, cmp, totalValue, profit, profitPct, reason);
-      db.prepare(`
+      await db.prepare(`
         UPDATE wallet SET balance = balance + ?, invested = invested - ?, realized_profit = realized_profit + ?, updated_at = datetime('now') WHERE user_id = ?
       `).run(totalValue, holding.total_investment, profit, userId);
 
@@ -73,9 +73,9 @@ function runSell(priceMap, userId, settings) {
 // ─── JOB 2: REPURCHASE (AVERAGE DOWN) ON LOSS LADDER ─────────────────────────
 // Loss is measured against the original first buy price. Each -10% step fires
 // exactly one repurchase, advancing repurchase_level by one per tick.
-function runRepurchase(priceMap, userId, settings) {
+async function runRepurchase(priceMap, userId, settings) {
   const logs = [];
-  const portfolio = db.prepare('SELECT * FROM portfolio WHERE user_id = ?').all(userId);
+  const portfolio = await db.prepare('SELECT * FROM portfolio WHERE user_id = ?').all(userId);
 
   for (const holding of portfolio) {
     const price = priceMap[holding.nse_code];
@@ -90,7 +90,7 @@ function runRepurchase(priceMap, userId, settings) {
     const currentLevel = holding.repurchase_level || 0;
     if (reachedLevel <= currentLevel) continue;
 
-    const wallet = db.prepare('SELECT * FROM wallet WHERE user_id = ?').get(userId);
+    const wallet = await db.prepare('SELECT * FROM wallet WHERE user_id = ?').get(userId);
     const budget = Math.min(settings.daily_budget || DEFAULT_DAILY_BUDGET, wallet.balance);
     const quantity = Math.floor(budget / cmp);
     if (quantity < 1) continue;
@@ -104,14 +104,14 @@ function runRepurchase(priceMap, userId, settings) {
     const newAvg = newInvestment / newQty;
     const reason = `Repurchase L${newLevel} (-${newLevel * REPURCHASE_STEP_PCT}% from entry ${ref.toFixed(2)})`;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE portfolio SET quantity = ?, buy_price = ?, total_investment = ?, repurchase_level = ? WHERE id = ? AND user_id = ?
     `).run(newQty, newAvg, newInvestment, newLevel, holding.id, userId);
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO trade_history (user_id, nse_code, underlying, trade_type, quantity, price, total_value, mode, reason)
       VALUES (?, ?, ?, 'BUY', ?, ?, ?, 'AUTO', ?)
     `).run(userId, holding.nse_code, holding.underlying, quantity, cmp, totalCost, reason);
-    db.prepare(`
+    await db.prepare(`
       UPDATE wallet SET balance = balance - ?, invested = invested + ?, updated_at = datetime('now') WHERE user_id = ?
     `).run(totalCost, totalCost, userId);
 
@@ -121,23 +121,23 @@ function runRepurchase(priceMap, userId, settings) {
 }
 
 // ─── JOB 3: DAILY BUY — ONE NEW STOCK PER DAY (DEEPEST 20DMA DIP) ─────────────
-function runDailyBuy(priceMap, userId, settings, { force = false } = {}) {
+async function runDailyBuy(priceMap, userId, settings, { force = false } = {}) {
   const logs = [];
 
   // Cap: only one daily-accumulation buy per IST calendar day.
   // In force mode, skip the daily cap so the demo can trigger trades on demand.
   if (!force) {
-    const alreadyBought = db.prepare(`
+    const alreadyBought = await db.prepare(`
       SELECT COUNT(*) AS c FROM trade_history
       WHERE user_id = ? AND trade_type = 'BUY' AND mode = 'AUTO'
         AND reason LIKE 'Daily%' AND traded_at >= ?
-    `).get(userId, startOfISTDayUtc()).c;
-    if (alreadyBought > 0) return logs;
+    `).get(userId, startOfISTDayUtc());
+    if (alreadyBought?.c > 0) return logs;
   }
 
-  const portfolio = db.prepare('SELECT nse_code FROM portfolio WHERE user_id = ?').all(userId);
+  const portfolio = await db.prepare('SELECT nse_code FROM portfolio WHERE user_id = ?').all(userId);
   const heldCodes = new Set(portfolio.map(p => p.nse_code));
-  const etfs = db.prepare('SELECT * FROM etf_list WHERE enabled = 1').all();
+  const etfs = await db.prepare('SELECT * FROM etf_list WHERE enabled = 1').all();
 
   // Eligible: not already held, valid prices.
   // In force mode, ignore the buy_trigger_pct threshold — just pick the deepest dip.
@@ -156,7 +156,7 @@ function runDailyBuy(priceMap, userId, settings, { force = false } = {}) {
   // Pick the deepest dip (lowest % vs 20DMA).
   candidates.sort((a, b) => a.pctFromDMA - b.pctFromDMA);
 
-  const wallet = db.prepare('SELECT * FROM wallet WHERE user_id = ?').get(userId);
+  const wallet = await db.prepare('SELECT * FROM wallet WHERE user_id = ?').get(userId);
   const budget = Math.min(settings.daily_budget || DEFAULT_DAILY_BUDGET, wallet.balance);
   for (const { etf, cmp, pctFromDMA } of candidates) {
     const quantity = Math.floor(budget / cmp); // as many shares as the budget allows
@@ -167,15 +167,15 @@ function runDailyBuy(priceMap, userId, settings, { force = false } = {}) {
     const reason = force
       ? `Force buy — deepest dip: ${pctFromDMA.toFixed(2)}% vs 20DMA`
       : `Daily 20DMA dip: ${pctFromDMA.toFixed(2)}%`;
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO portfolio (user_id, nse_code, underlying, quantity, buy_price, total_investment, first_buy_price, repurchase_level)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0)
     `).run(userId, etf.nse_code, etf.underlying, quantity, cmp, totalCost, cmp);
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO trade_history (user_id, nse_code, underlying, trade_type, quantity, price, total_value, mode, reason)
       VALUES (?, ?, ?, 'BUY', ?, ?, ?, 'AUTO', ?)
     `).run(userId, etf.nse_code, etf.underlying, quantity, cmp, totalCost, reason);
-    db.prepare(`
+    await db.prepare(`
       UPDATE wallet SET balance = balance - ?, invested = invested + ?, updated_at = datetime('now') WHERE user_id = ?
     `).run(totalCost, totalCost, userId);
 
@@ -186,16 +186,15 @@ function runDailyBuy(priceMap, userId, settings, { force = false } = {}) {
 }
 
 // ─── ORCHESTRATOR ────────────────────────────────────────────────────────────
-function runAutoTrade(priceMap, userId, { force = false } = {}) {
-  const settings = db.prepare('SELECT * FROM auto_settings WHERE user_id = ?').get(userId);
+async function runAutoTrade(priceMap, userId, { force = false } = {}) {
+  const settings = await db.prepare('SELECT * FROM auto_settings WHERE user_id = ?').get(userId);
   if (!settings) return [];
   if (!force && !settings.enabled) return [];
 
-  return [
-    ...runSell(priceMap, userId, settings),
-    ...runRepurchase(priceMap, userId, settings),
-    ...runDailyBuy(priceMap, userId, settings, { force }),
-  ];
+  const sells = await runSell(priceMap, userId, settings);
+  const repurchases = await runRepurchase(priceMap, userId, settings);
+  const buys = await runDailyBuy(priceMap, userId, settings, { force });
+  return [...sells, ...repurchases, ...buys];
 }
 
 module.exports = { runAutoTrade, isMarketOpen };

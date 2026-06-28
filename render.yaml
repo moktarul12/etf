@@ -8,8 +8,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: DB_PATH
-        value: /var/data/etf-dukan.db
+      - key: TURSO_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
@@ -32,11 +34,6 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
-    disk:
-      name: etf-db-volume
-      mountPath: /var/data
-      sizeGB: 1
-
   - type: web
     name: etf-frontend
     runtime: static
