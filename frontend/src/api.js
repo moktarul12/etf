@@ -62,3 +62,4 @@ export const getHistory = (params = {}) => {
 export const getAutoSettings = () => req('/auto-settings');
 export const saveAutoSettings = (data) => req('/auto-settings', { method: 'PUT', body: data });
 export const runAutoTrade = () => req('/auto-trade/run', { method: 'POST' });
+export const forceAutoTrade = () => req('/auto-trade/force', { method: 'POST' });

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { getAutoSettings, saveAutoSettings, runAutoTrade } from '../api';
-import { Zap, Play, Pause, Settings, CheckCircle, AlertTriangle, RefreshCw } from 'lucide-react';
+import { getAutoSettings, saveAutoSettings, runAutoTrade, forceAutoTrade } from '../api';
+import { Zap, Play, Pause, Settings, CheckCircle, AlertTriangle, RefreshCw, Flame } from 'lucide-react';
 
 export default function AutoTrade() {
   const [settings, setSettings] = useState(null);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [forcing, setForcing] = useState(false);
   const [runResult, setRunResult] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -40,6 +41,15 @@ export default function AutoTrade() {
       setRunResult(res);
     } catch (e) { setError(e.message); }
     setRunning(false);
+  };
+
+  const handleForceTrade = async () => {
+    setForcing(true); setRunResult(null); setError('');
+    try {
+      const res = await forceAutoTrade();
+      setRunResult(res);
+    } catch (e) { setError(e.message); }
+    setForcing(false);
   };
 
   if (!settings || !form) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading settings...</div>;
@@ -118,12 +128,18 @@ export default function AutoTrade() {
         <div className="flex justify-between items-center" style={{ marginBottom: runResult ? 12 : 0 }}>
           <div>
             <p className="font-semibold" style={{ fontSize: 14 }}>Manual Run</p>
-            <p style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Trigger auto-trade engine right now</p>
+            <p style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Run Now respects trigger thresholds. Force Trade bypasses them and buys the deepest dip.</p>
           </div>
-          <button className="btn btn-purple" onClick={handleRunNow} disabled={running}>
-            <RefreshCw size={14} className={running ? 'spin' : ''} />
-            {running ? 'Running...' : 'Run Now'}
-          </button>
+          <div className="flex gap-2">
+            <button className="btn btn-purple" onClick={handleRunNow} disabled={running || forcing}>
+              <RefreshCw size={14} className={running ? 'spin' : ''} />
+              {running ? 'Running...' : 'Run Now'}
+            </button>
+            <button className="btn btn-warning" onClick={handleForceTrade} disabled={running || forcing}>
+              <Flame size={14} />
+              {forcing ? 'Forcing...' : 'Force Trade'}
+            </button>
+          </div>
         </div>
 
         {runResult && (

@@ -285,6 +285,20 @@ app.post('/api/auto-trade/run', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.post('/api/auto-trade/force', authMiddleware, async (req, res) => {
+  try {
+    const etfs = db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
+    const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
+    persistPrices(prices);
+    const logs = runAutoTrade(prices, req.user.id, { force: true });
+    if (logs.length > 0) {
+      const u = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+      if (u?.email) sendTradeEmail(u.email, logs);
+    }
+    res.json({ success: true, actions: logs });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── AUTO TRADE SCHEDULER (per user, every 30 min during NSE market hours) ────
 
 // Runs the engine for all users with auto-trade enabled. Returns a summary.

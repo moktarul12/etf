@@ -121,29 +121,33 @@ function runRepurchase(priceMap, userId, settings) {
 }
 
 // ─── JOB 3: DAILY BUY — ONE NEW STOCK PER DAY (DEEPEST 20DMA DIP) ─────────────
-function runDailyBuy(priceMap, userId, settings) {
+function runDailyBuy(priceMap, userId, settings, { force = false } = {}) {
   const logs = [];
 
   // Cap: only one daily-accumulation buy per IST calendar day.
-  const alreadyBought = db.prepare(`
-    SELECT COUNT(*) AS c FROM trade_history
-    WHERE user_id = ? AND trade_type = 'BUY' AND mode = 'AUTO'
-      AND reason LIKE 'Daily%' AND traded_at >= ?
-  `).get(userId, startOfISTDayUtc()).c;
-  if (alreadyBought > 0) return logs;
+  // In force mode, skip the daily cap so the demo can trigger trades on demand.
+  if (!force) {
+    const alreadyBought = db.prepare(`
+      SELECT COUNT(*) AS c FROM trade_history
+      WHERE user_id = ? AND trade_type = 'BUY' AND mode = 'AUTO'
+        AND reason LIKE 'Daily%' AND traded_at >= ?
+    `).get(userId, startOfISTDayUtc()).c;
+    if (alreadyBought > 0) return logs;
+  }
 
   const portfolio = db.prepare('SELECT nse_code FROM portfolio WHERE user_id = ?').all(userId);
   const heldCodes = new Set(portfolio.map(p => p.nse_code));
   const etfs = db.prepare('SELECT * FROM etf_list WHERE enabled = 1').all();
 
-  // Eligible: not already held, valid prices, and below 20DMA by the trigger %.
+  // Eligible: not already held, valid prices.
+  // In force mode, ignore the buy_trigger_pct threshold — just pick the deepest dip.
   const candidates = [];
   for (const etf of etfs) {
     if (heldCodes.has(etf.nse_code)) continue; // skip held → naturally moves to next
     const price = priceMap[etf.nse_code];
     if (!price || !price.cmp || !price.dma20) continue;
     const pctFromDMA = ((price.cmp - price.dma20) / price.dma20) * 100;
-    if (pctFromDMA <= settings.buy_trigger_pct) {
+    if (force || pctFromDMA <= settings.buy_trigger_pct) {
       candidates.push({ etf, cmp: price.cmp, pctFromDMA });
     }
   }
@@ -160,7 +164,9 @@ function runDailyBuy(priceMap, userId, settings) {
     const totalCost = quantity * cmp;
     if (totalCost > wallet.balance) continue;
 
-    const reason = `Daily 20DMA dip: ${pctFromDMA.toFixed(2)}%`;
+    const reason = force
+      ? `Force buy — deepest dip: ${pctFromDMA.toFixed(2)}% vs 20DMA`
+      : `Daily 20DMA dip: ${pctFromDMA.toFixed(2)}%`;
     db.prepare(`
       INSERT INTO portfolio (user_id, nse_code, underlying, quantity, buy_price, total_investment, first_buy_price, repurchase_level)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0)
@@ -180,14 +186,15 @@ function runDailyBuy(priceMap, userId, settings) {
 }
 
 // ─── ORCHESTRATOR ────────────────────────────────────────────────────────────
-function runAutoTrade(priceMap, userId) {
+function runAutoTrade(priceMap, userId, { force = false } = {}) {
   const settings = db.prepare('SELECT * FROM auto_settings WHERE user_id = ?').get(userId);
-  if (!settings || !settings.enabled) return [];
+  if (!settings) return [];
+  if (!force && !settings.enabled) return [];
 
   return [
     ...runSell(priceMap, userId, settings),
     ...runRepurchase(priceMap, userId, settings),
-    ...runDailyBuy(priceMap, userId, settings),
+    ...runDailyBuy(priceMap, userId, settings, { force }),
   ];
 }
 
