@@ -4,7 +4,7 @@ const cors = require('cors');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
-const { db, ensureUserData } = require('./db');
+const { db, ensureUserData, ensureUser } = require('./db');
 const ETF_CODES = require('./etfCodes');
 const { getPricesForCodes, getPriceForCode } = require('./priceService');
 const { runAutoTrade, isMarketOpen } = require('./autoTrade');
@@ -55,10 +55,15 @@ function authMiddleware(req, res, next) {
   if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' });
   try {
     req.user = jwt.verify(header.slice(7), JWT_SECRET);
-    next();
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Invalid token' });
   }
+  try {
+    ensureUser(req.user); // recreate user/wallet/settings rows if the DB was reset
+  } catch (e) {
+    console.error('[ensureUser] failed:', e.message);
+  }
+  next();
 }
 
 // Seed ETF list from etfCodes.js on startup (upsert)

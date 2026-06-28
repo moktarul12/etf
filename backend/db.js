@@ -2,10 +2,15 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-// Use working directory for production (disk volume may not be configured)
-const dbPath = process.env.NODE_ENV === 'production'
-  ? path.join(process.cwd(), 'etf-dukan.db')
-  : path.join(__dirname, 'etf-dukan.db');
+// DB location priority:
+//   1. DB_PATH env var (set this to a persistent disk path, e.g. /var/data/etf-dukan.db)
+//   2. production: process.cwd() (NOTE: ephemeral on free tier — wiped each deploy)
+//   3. development: alongside this file
+const dbPath = process.env.DB_PATH
+  ? process.env.DB_PATH
+  : (process.env.NODE_ENV === 'production'
+      ? path.join(process.cwd(), 'etf-dukan.db')
+      : path.join(__dirname, 'etf-dukan.db'));
 
 // Create directory if it doesn't exist
 const dbDir = path.dirname(dbPath);
@@ -118,4 +123,28 @@ function ensureUserData(userId) {
   if (!s) db.prepare('INSERT INTO auto_settings (user_id) VALUES (?)').run(userId);
 }
 
-module.exports = { db, ensureUserData };
+// Ensure the user row (and their wallet/auto_settings) exist for a JWT identity.
+// This recovers gracefully if the DB was reset (e.g. ephemeral storage on a
+// redeploy) while a user still holds a valid token.
+function ensureUser(claims) {
+  if (!claims?.id) return;
+  const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(claims.id);
+  if (!existing) {
+    try {
+      db.prepare('INSERT INTO users (id, google_id, email, name, avatar) VALUES (?, ?, ?, ?, ?)')
+        .run(
+          claims.id,
+          `restored-${claims.id}`,
+          claims.email || `user${claims.id}@example.com`,
+          claims.name || null,
+          claims.avatar || null
+        );
+    } catch (e) {
+      // A row with the same email/google_id may exist under a different id;
+      // ignore and let ensureUserData attempt what it can.
+    }
+  }
+  ensureUserData(claims.id);
+}
+
+module.exports = { db, ensureUserData, ensureUser };
