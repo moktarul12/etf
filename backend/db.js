@@ -4,8 +4,8 @@ const path = require('path');
 // DB connection:
 //   Production: TURSO_URL + TURSO_AUTH_TOKEN (free hosted SQLite — survives redeploys)
 //   Local dev : file:./etf-dukan.db alongside this file
-const tursoUrl = process.env.TURSO_URL;
-const tursoToken = process.env.TURSO_AUTH_TOKEN;
+const tursoUrl = process.env.TURSO_URL || 'libsql://etf-dukan-moktarul.aws-ap-south-1.turso.io';
+const tursoToken = process.env.TURSO_AUTH_TOKEN || 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE3ODI2Njg2ODAsImlkIjoiMDE5ZjBmNTUtMjAwMS03MTFiLThkMjEtMjlmNDE3ZTZhMTFjIiwicmlkIjoiMGI5NTFmMTEtOThhOS00NmI2LTgwNmUtZGZlYzMwZDc1OGE4In0.SBbaLyKk9WPuRi6mUbugUdtrfWDhUbSlimC0Kr6oQzlzfO6yx8_cMD9aRTe9Jvn6C-T5YPpHOOHu59ZLSr1nAg';
 
 const dbUrl = tursoUrl
   ? tursoUrl
