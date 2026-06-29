@@ -156,18 +156,26 @@ async function ensureUser(claims) {
   if (!claims?.id) return;
   const existing = await db.prepare('SELECT id FROM users WHERE id = ?').get(claims.id);
   if (!existing) {
-    try {
-      await db.prepare('INSERT INTO users (id, google_id, email, name, avatar) VALUES (?, ?, ?, ?, ?)')
-        .run(
-          claims.id,
-          `restored-${claims.id}`,
-          claims.email || `user${claims.id}@example.com`,
-          claims.name || null,
-          claims.avatar || null
-        );
-    } catch (e) {
-      // A row with the same email/google_id may exist under a different id;
-      // ignore and let ensureUserData attempt what it can.
+    // Check if a row with the same email already exists (e.g. from a previous OAuth login)
+    const existingByEmail = claims.email
+      ? await db.prepare('SELECT id FROM users WHERE email = ?').get(claims.email)
+      : null;
+    if (existingByEmail) {
+      claims.id = existingByEmail.id;
+    } else {
+      try {
+        await db.prepare('INSERT INTO users (id, google_id, email, name, avatar) VALUES (?, ?, ?, ?, ?)')
+          .run(
+            claims.id,
+            `restored-${claims.id}`,
+            claims.email || `user${claims.id}@example.com`,
+            claims.name || null,
+            claims.avatar || null
+          );
+      } catch (e) {
+        const existingByGid = await db.prepare('SELECT id FROM users WHERE google_id = ?').get(`restored-${claims.id}`);
+        if (existingByGid) claims.id = existingByGid.id;
+      }
     }
   }
   await ensureUserData(claims.id);

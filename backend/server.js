@@ -35,7 +35,13 @@ passport.use(new GoogleStrategy({
 
     let user = await db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
     if (!user) {
-      await db.prepare('INSERT INTO users (google_id, email, name, avatar) VALUES (?, ?, ?, ?)').run(google_id, email, name, avatar);
+      // Check if a row with the same email already exists (e.g. created by ensureUser after DB reset)
+      const existingByEmail = await db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+      if (existingByEmail) {
+        await db.prepare('UPDATE users SET google_id=?, name=?, avatar=? WHERE id=?').run(google_id, name, avatar, existingByEmail.id);
+      } else {
+        await db.prepare('INSERT INTO users (google_id, email, name, avatar) VALUES (?, ?, ?, ?)').run(google_id, email, name, avatar);
+      }
       user = await db.prepare('SELECT * FROM users WHERE google_id = ?').get(google_id);
     } else {
       await db.prepare('UPDATE users SET name=?, avatar=? WHERE google_id=?').run(name, avatar, google_id);
