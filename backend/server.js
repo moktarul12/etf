@@ -318,7 +318,7 @@ async function runAutoTradeForAllUsers({ force = false } = {}) {
   await persistPrices(prices);
   const results = [];
   for (const { user_id } of activeUsers) {
-    const logs = await runAutoTrade(prices, user_id);
+    const logs = await runAutoTrade(prices, user_id, { force });
     if (logs.length > 0) {
       console.log(`[AutoTrade] user=${user_id}`, new Date().toISOString(), logs);
       const u = await db.prepare('SELECT email FROM users WHERE id = ?').get(user_id);
