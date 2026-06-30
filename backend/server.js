@@ -254,10 +254,10 @@ app.post('/api/trade/sell', authMiddleware, async (req, res) => {
 app.get('/api/history', authMiddleware, async (req, res) => {
   const { limit = 100, type } = req.query;
   const uid = req.user.id;
-  let query = 'SELECT * FROM trade_history WHERE user_id = ?';
+  let query = `SELECT t.*, e.cmp AS current_price FROM trade_history t LEFT JOIN etf_list e ON t.nse_code = e.nse_code WHERE t.user_id = ?`;
   const params = [uid];
-  if (type) { query += ' AND trade_type = ?'; params.push(type); }
-  query += ' ORDER BY traded_at DESC LIMIT ?';
+  if (type) { query += ' AND t.trade_type = ?'; params.push(type); }
+  query += ' ORDER BY t.traded_at DESC LIMIT ?';
   params.push(parseInt(limit));
   res.json(await db.prepare(query).all(...params));
 });

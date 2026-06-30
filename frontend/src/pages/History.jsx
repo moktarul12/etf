@@ -7,12 +7,12 @@ const fmt = (n, d = 2) => n != null ? Number(n).toFixed(d) : '0';
 
 export default function History() {
   const [trades, setTrades] = useState([]);
-  const [filter, setFilter] = useState('ALL');
+  const [filter, setFilter] = useState('BUY');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    getHistory({ type: filter === 'ALL' ? undefined : filter, limit: 200 })
+    getHistory({ type: filter, limit: 200 })
       .then(setTrades)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -47,13 +47,13 @@ export default function History() {
 
       {/* Filter */}
       <div className="flex gap-2 mb-4 items-center">
-        {['ALL', 'BUY', 'SELL'].map(f => (
+        {['BUY', 'SELL'].map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
             className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-outline'}`}
           >
-            {f === 'ALL' ? 'All Trades' : f === 'BUY' ? '🟢 Buys' : '🟠 Sells'}
+            {f === 'BUY' ? '🟢 Buys' : '🟠 Sells'}
           </button>
         ))}
       </div>
@@ -77,7 +77,13 @@ export default function History() {
             <tbody>
               {trades.map((t) => {
                 const isBuy = t.trade_type === 'BUY';
-                const isPos = t.profit >= 0;
+                const pnl = isBuy && t.current_price
+                  ? (t.current_price - t.price) * t.quantity
+                  : t.profit || 0;
+                const pnlPct = isBuy && t.current_price
+                  ? ((t.current_price - t.price) / t.price) * 100
+                  : t.profit_pct || 0;
+                const isPos = pnl >= 0;
                 return (
                   <tr key={t.id}>
                     <td>
@@ -92,13 +98,11 @@ export default function History() {
                     <td className="right" style={{ color: '#475569' }}>{fmtInr(t.price)}</td>
                     <td className="right font-semibold">{fmtInr(t.total_value)}</td>
                     <td className="right">
-                      {!isBuy ? (
-                        <span className={`flex justify-end items-center gap-1 ${isPos ? 'profit' : 'loss'}`}>
-                          {isPos ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                          {isPos ? '+' : ''}{fmtInr(t.profit)}
-                          <span style={{ fontSize: 11 }}>({isPos ? '+' : ''}{fmt(t.profit_pct)}%)</span>
-                        </span>
-                      ) : <span style={{ color: '#e2e8f0' }}>—</span>}
+                      <span className={`flex justify-end items-center gap-1 ${isPos ? 'profit' : 'loss'}`}>
+                        {isPos ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                        {isPos ? '+' : ''}{fmtInr(pnl)}
+                        <span style={{ fontSize: 11 }}>({isPos ? '+' : ''}{fmt(pnlPct)}%)</span>
+                      </span>
                     </td>
                     <td className="center">
                       <span className={`badge ${t.mode === 'AUTO' ? 'badge-auto' : 'badge-manual'}`}>{t.mode}</span>
