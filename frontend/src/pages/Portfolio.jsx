@@ -33,7 +33,10 @@ export default function Portfolio() {
     setPriceLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    refreshPrices();
+  }, []);
 
   const openSell = (h) => {
     setSellModal(h);
@@ -45,7 +48,7 @@ export default function Portfolio() {
     if (!sellModal) return;
     setDoing(true); setError('');
     const p = prices[sellModal.nse_code];
-    const price = p?.cmp || sellModal.buy_price;
+    const price = p?.cmp || sellModal.current_price || sellModal.buy_price;
     try {
       await sellETF({ nse_code: sellModal.nse_code, quantity: parseInt(qty), price });
       await load();
@@ -57,7 +60,8 @@ export default function Portfolio() {
   const totalInvested = portfolio.reduce((s, h) => s + h.total_investment, 0);
   const totalCurrent = portfolio.reduce((s, h) => {
     const p = prices[h.nse_code];
-    return s + (p ? p.cmp * h.quantity : h.total_investment);
+    const cmp = p ? p.cmp : h.current_price;
+    return s + (cmp ? cmp * h.quantity : h.total_investment);
   }, 0);
   const unrealized = totalCurrent - totalInvested;
 
@@ -112,7 +116,7 @@ export default function Portfolio() {
             <tbody>
               {portfolio.map((h) => {
                 const p = prices[h.nse_code];
-                const cmp = p?.cmp;
+                const cmp = p?.cmp || h.current_price;
                 const currentVal = cmp ? cmp * h.quantity : null;
                 const pnl = currentVal != null ? currentVal - h.total_investment : null;
                 const pnlPct = pnl != null ? (pnl / h.total_investment) * 100 : null;

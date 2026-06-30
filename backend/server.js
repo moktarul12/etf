@@ -197,7 +197,14 @@ app.post('/api/wallet/reset', authMiddleware, async (req, res) => {
 // ─── PORTFOLIO ROUTES (per user) ──────────────────────────────────────────────
 
 app.get('/api/portfolio', authMiddleware, async (req, res) => {
-  res.json(await db.prepare('SELECT * FROM portfolio WHERE user_id = ? ORDER BY created_at DESC').all(req.user.id));
+  const rows = await db.prepare(`
+    SELECT p.*, e.cmp AS current_price, e.dma20 AS current_dma20
+    FROM portfolio p
+    LEFT JOIN etf_list e ON p.nse_code = e.nse_code
+    WHERE p.user_id = ?
+    ORDER BY p.created_at DESC
+  `).all(req.user.id);
+  res.json(rows);
 });
 
 app.post('/api/trade/buy', authMiddleware, async (req, res) => {
