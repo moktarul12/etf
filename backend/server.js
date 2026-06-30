@@ -345,14 +345,10 @@ app.get('/api/cron/auto-run', async (req, res) => {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   try {
-    // Always fetch + persist prices so they stay fresh on a 5-min cron.
-    const etfs = await db.prepare('SELECT nse_code FROM etf_list WHERE enabled = 1').all();
-    const prices = await getPricesForCodes(etfs.map(e => e.nse_code));
-    await persistPrices(prices);
-
     // Run auto-trade (gated by market hours unless force=1).
+    // Prices are updated separately by the /api/cron/price-update endpoint.
     const summary = await runAutoTradeForAllUsers({ force: req.query.force === '1' });
-    res.json({ success: true, pricesUpdated: etfs.length, ...summary });
+    res.json({ success: true, ...summary });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
