@@ -87,7 +87,7 @@ async function getPriceForCode(nseCode) {
 
 async function getPricesForCodes(nseCodes) {
   // Batch with a concurrency limit to balance speed vs. rate limiting.
-  const BATCH = 10;
+  const BATCH = 25;
   const results = {};
 
   for (let i = 0; i < nseCodes.length; i += BATCH) {
@@ -100,7 +100,7 @@ async function getPricesForCodes(nseCodes) {
     );
     // Small delay between batches
     if (i + BATCH < nseCodes.length) {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 50));
     }
   }
 
