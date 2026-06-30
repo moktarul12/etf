@@ -5,7 +5,6 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const jwt = require('jsonwebtoken');
 const { db, initDb, ensureUserData, ensureUser } = require('./db');
-const ETF_CODES = require('./etfCodes');
 const { getPricesForCodes, getPriceForCode } = require('./priceService');
 const { runAutoTrade, isMarketOpen } = require('./autoTrade');
 const { sendTradeEmail } = require('./mailer');
@@ -73,21 +72,6 @@ async function authMiddleware(req, res, next) {
     console.error('[ensureUser] failed:', e.message);
   }
   next();
-}
-
-// Seed ETF list from etfCodes.js on startup (upsert)
-const upsertETF = db.prepare(`
-  INSERT INTO etf_list (nse_code, underlying) VALUES (?, ?)
-  ON CONFLICT(nse_code) DO UPDATE SET underlying = excluded.underlying
-`);
-async function seedAll() {
-  for (const etf of ETF_CODES) {
-    await upsertETF.run(etf.nse_code, etf.underlying);
-  }
-  // Disable ETFs no longer in the master list (instead of deleting, to preserve portfolio references)
-  const validCodes = ETF_CODES.map(e => e.nse_code);
-  const placeholders = validCodes.map(() => '?').join(',');
-  await db.prepare(`UPDATE etf_list SET enabled = 0 WHERE nse_code NOT IN (${placeholders})`).run(...validCodes);
 }
 
 // ─── GOOGLE OAUTH ROUTES ──────────────────────────────────────────────────────
@@ -390,7 +374,6 @@ app.get('/api/cron/price-update', async (req, res) => {
 // ─── STARTUP (async: init DB → seed ETFs → start server) ────────────────────
 async function main() {
   await initDb();
-  await seedAll();
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`ETF Dukan backend running on http://0.0.0.0:${PORT}`);
   });
