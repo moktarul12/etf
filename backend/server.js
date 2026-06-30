@@ -20,6 +20,9 @@ app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(express.json());
 app.use(passport.initialize());
 
+// Lightweight health check — no DB, no auth, just keeps Render free tier awake.
+app.get('/health', (req, res) => res.json({ ok: true }));
+
 // ─── GOOGLE OAUTH STRATEGY ────────────────────────────────────────────────────
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
